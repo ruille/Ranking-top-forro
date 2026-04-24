@@ -9,42 +9,94 @@
 
 <style>
 body { margin:0; font-family:Arial; background:#08172c; color:white; }
-nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
-button { background:none; border:none; color:white; font-size:16px; }
+
+nav {
+  display:flex; justify-content:space-around;
+  background:#0d2a4d; padding:10px;
+}
+
+button { border:none; border-radius:6px; padding:8px; }
+
 .section { display:none; padding:15px; }
 .active { display:block; }
-.card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
-input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radius:6px; }
-.rank-item { background:#163c66; padding:10px; margin:5px 0; border-radius:10px; display:flex; justify-content:space-between; }
+
+.card {
+  background:#102a4a;
+  padding:15px;
+  margin:10px 0;
+  border-radius:10px;
+}
+
+input,select {
+  width:100%;
+  padding:10px;
+  margin:5px 0;
+  border:none;
+  border-radius:6px;
+}
+
+.rank-item {
+  background:#163c66;
+  padding:10px;
+  margin:5px 0;
+  border-radius:10px;
+  display:flex;
+  justify-content:space-between;
+}
+
+.inativo {
+  opacity:0.4;
+  text-decoration:line-through;
+}
 </style>
 </head>
 <body>
 
 <nav>
   <button onclick="trocar('home')">🏆</button>
-  <button onclick="adm()">👑</button>
+  <button onclick="abrirADM()">👑</button>
   <button onclick="trocar('grafico')">📊</button>
 </nav>
 
+<!-- RANKING -->
 <div id="home" class="section active">
   <h2>Ranking</h2>
   <div id="ranking"></div>
 </div>
 
+<!-- ADM -->
 <div id="adm" class="section">
+
   <div class="card">
+    <h3>Produção</h3>
+
     <select id="nome"></select>
+
     <select id="turno">
       <option value="1">1º</option>
       <option value="2">2º</option>
       <option value="3">3º</option>
     </select>
+
     <select id="maquina"></select>
+
     <input id="q" type="number" placeholder="Quantidade">
+
     <button onclick="enviar()">Salvar</button>
   </div>
+
+  <div class="card">
+    <h3>Auxiliares</h3>
+
+    <input id="novoNome" placeholder="Novo auxiliar">
+    <button onclick="addAux()">Adicionar</button>
+
+    <ul id="listaAux"></ul>
+  </div>
+
 </div>
 
+<!-- GRÁFICO -->
 <div id="grafico" class="section">
   <canvas id="chart"></canvas>
 </div>
@@ -52,54 +104,126 @@ input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radiu
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot }
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  onSnapshot,
+  doc,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔥 SEU CONFIG (já colocado)
+// 🔥 SEU FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyD-GnRzf_Km4WMnWkVEnlZCj-nASq7IzOI",
   authDomain: "topforro-4815f.firebaseapp.com",
   projectId: "topforro-4815f",
   storageBucket: "topforro-4815f.firebasestorage.app",
   messagingSenderId: "987788433002",
-  appId: "1:987788433002:web:80841db4497cdc58a09c13",
-  measurementId: "G-H0WGKSD69N"
+  appId: "1:987788433002:web:80841db4497cdc58a09c13"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// 📦 dados
 let dados = [];
+let auxiliares = [];
 
-let auxiliares = ["Carlos","João","Maria"];
+// 🏭 máquinas
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
+// 🔐 ADM
+function abrirADM(){
+  let s = prompt("Senha:");
+  if(s==="2026deltapaython") trocar("adm");
+}
+
+// trocar tela
 function trocar(t){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.getElementById(t).classList.add("active");
 }
 
-window.adm = ()=>{
-  let s = prompt("Senha:");
-  if(s==="2026deltapaython") trocar("adm");
-}
+// 🔥 adicionar auxiliar
+window.addAux = async ()=>{
+  let nome = document.getElementById("novoNome").value.trim();
+  if(!nome) return;
 
-function carregar(){
-  let n=document.getElementById("nome");
+  await addDoc(collection(db,"auxiliares"),{
+    nome,
+    ativo:true
+  });
+
+  document.getElementById("novoNome").value="";
+};
+
+// 🔥 ativar/desativar
+window.toggle = async (id, status)=>{
+  await updateDoc(doc(db,"auxiliares",id),{
+    ativo:!status
+  });
+};
+
+// 🔄 ouvir auxiliares
+onSnapshot(collection(db,"auxiliares"), snap=>{
+  auxiliares=[];
+  snap.forEach(doc=>{
+    auxiliares.push({id:doc.id,...doc.data()});
+  });
+
+  atualizarAuxiliares();
+});
+
+// 🔄 ouvir produção
+onSnapshot(collection(db,"producao"), snap=>{
+  dados=[];
+  snap.forEach(doc=>dados.push(doc.data()));
+  atualizar();
+});
+
+// carregar selects
+function atualizarAuxiliares(){
+  let select = document.getElementById("nome");
+  select.innerHTML="";
+
+  let ul = document.getElementById("listaAux");
+  ul.innerHTML="";
+
   auxiliares.forEach(a=>{
-    let op=document.createElement("option");
-    op.value=a; op.textContent=a;
-    n.appendChild(op);
+
+    if(a.ativo){
+      let op=document.createElement("option");
+      op.value=a.nome;
+      op.textContent=a.nome;
+      select.appendChild(op);
+    }
+
+    let li=document.createElement("li");
+    li.className = a.ativo ? "" : "inativo";
+
+    li.innerHTML = `
+      ${a.nome} (${a.ativo?"ativo":"demitido"})
+      <button onclick="toggle('${a.id}',${a.ativo})">
+        ${a.ativo?"Demitir":"Reativar"}
+      </button>
+    `;
+
+    ul.appendChild(li);
   });
 
-  let m=document.getElementById("maquina");
-  maquinas.forEach(a=>{
+  // máquinas
+  let maq=document.getElementById("maquina");
+  maq.innerHTML="";
+  maquinas.forEach(m=>{
     let op=document.createElement("option");
-    op.value=a; op.textContent=a;
-    m.appendChild(op);
+    op.value=m;
+    op.textContent=m;
+    maq.appendChild(op);
   });
 }
 
+// salvar produção
 window.enviar = async ()=>{
   let nome=document.getElementById("nome").value;
   let turno=document.getElementById("turno").value;
@@ -114,18 +238,7 @@ window.enviar = async ()=>{
   });
 };
 
-// 🔥 TEMPO REAL
-onSnapshot(collection(db,"producao"), snap=>{
-  dados=[];
-  snap.forEach(doc=>dados.push(doc.data()));
-  atualizar();
-});
-
-function atualizar(){
-  ranking();
-  grafico();
-}
-
+// ranking
 function ranking(){
   let r={};
   dados.forEach(d=>{
@@ -138,12 +251,19 @@ function ranking(){
 
   Object.entries(r).sort((a,b)=>b[1]-a[1])
   .forEach(([n,t],i)=>{
-    div.innerHTML+=`<div class="rank-item">${i+1}º ${n}<span>${t}</span></div>`;
+    div.innerHTML+=`
+      <div class="rank-item">
+        ${i+1}º ${n}
+        <span>${t}</span>
+      </div>`;
   });
 }
 
-let ctx=document.getElementById("chart");
-let chart=new Chart(ctx,{type:"line",data:{labels:[],datasets:[]}});
+// gráfico
+let chart = new Chart(document.getElementById("chart"),{
+  type:"line",
+  data:{labels:[],datasets:[]}
+});
 
 function grafico(){
   let dias=[...new Set(dados.map(d=>d.data))].sort();
@@ -163,10 +283,15 @@ function grafico(){
     data:linha,
     borderWidth:3
   }];
+
   chart.update();
 }
 
-carregar();
+// atualizar
+function atualizar(){
+  ranking();
+  grafico();
+}
 
 </script>
 
