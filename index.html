@@ -10,7 +10,7 @@
 <style>
 body { margin:0; font-family:Arial; background:#08172c; color:white; }
 nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
-button { background:none; border:none; color:white; }
+button { background:none; border:none; color:white; font-size:16px; }
 .section { display:none; padding:15px; }
 .active { display:block; }
 .card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
@@ -55,11 +55,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getFirestore, collection, addDoc, onSnapshot }
 from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔴 COLE AQUI SEU FIREBASE
+// 🔥 SEU CONFIG (já colocado)
 const firebaseConfig = {
-  apiKey: "COLE_AQUI",
-  authDomain: "COLE_AQUI",
-  projectId: "COLE_AQUI",
+  apiKey: "AIzaSyD-GnRzf_Km4WMnWkVEnlZCj-nASq7IzOI",
+  authDomain: "topforro-4815f.firebaseapp.com",
+  projectId: "topforro-4815f",
+  storageBucket: "topforro-4815f.firebasestorage.app",
+  messagingSenderId: "987788433002",
+  appId: "1:987788433002:web:80841db4497cdc58a09c13",
+  measurementId: "G-H0WGKSD69N"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -67,7 +71,7 @@ const db = getFirestore(app);
 
 let dados = [];
 
-let auxiliares = ["Carlos","João"];
+let auxiliares = ["Carlos","João","Maria"];
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
 function trocar(t){
@@ -110,7 +114,7 @@ window.enviar = async ()=>{
   });
 };
 
-// tempo real
+// 🔥 TEMPO REAL
 onSnapshot(collection(db,"producao"), snap=>{
   dados=[];
   snap.forEach(doc=>dados.push(doc.data()));
@@ -154,7 +158,11 @@ function grafico(){
   });
 
   chart.data.labels=dias;
-  chart.data.datasets=[{label:"Total",data:linha}];
+  chart.data.datasets=[{
+    label:"Produção Total",
+    data:linha,
+    borderWidth:3
+  }];
   chart.update();
 }
 
