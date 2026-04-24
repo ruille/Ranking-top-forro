@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top Forro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body { margin:0; font-family:Arial; background:#08172c; color:white; }
+nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
+button { background:none; border:none; color:white; }
+.section { display:none; padding:15px; }
+.active { display:block; }
+.card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
+input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radius:6px; }
+.rank-item { background:#163c66; padding:10px; margin:5px 0; border-radius:10px; display:flex; justify-content:space-between; }
+</style>
+</head>
+<body>
+
+<nav>
+  <button onclick="trocar('home')">🏆</button>
+  <button onclick="adm()">👑</button>
+  <button onclick="trocar('grafico')">📊</button>
+</nav>
+
+<div id="home" class="section active">
+  <h2>Ranking</h2>
+  <div id="ranking"></div>
+</div>
+
+<div id="adm" class="section">
+  <div class="card">
+    <select id="nome"></select>
+    <select id="turno">
+      <option value="1">1º</option>
+      <option value="2">2º</option>
+      <option value="3">3º</option>
+    </select>
+    <select id="maquina"></select>
+    <input id="q" type="number" placeholder="Quantidade">
+    <button onclick="enviar()">Salvar</button>
+  </div>
+</div>
+
+<div id="grafico" class="section">
+  <canvas id="chart"></canvas>
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot }
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// 🔴 COLE AQUI SEU FIREBASE
+const firebaseConfig = {
+  apiKey: "COLE_AQUI",
+  authDomain: "COLE_AQUI",
+  projectId: "COLE_AQUI",
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let dados = [];
+
+let auxiliares = ["Carlos","João"];
+let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
+
+function trocar(t){
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+  document.getElementById(t).classList.add("active");
+}
+
+window.adm = ()=>{
+  let s = prompt("Senha:");
+  if(s==="2026deltapaython") trocar("adm");
+}
+
+function carregar(){
+  let n=document.getElementById("nome");
+  auxiliares.forEach(a=>{
+    let op=document.createElement("option");
+    op.value=a; op.textContent=a;
+    n.appendChild(op);
+  });
+
+  let m=document.getElementById("maquina");
+  maquinas.forEach(a=>{
+    let op=document.createElement("option");
+    op.value=a; op.textContent=a;
+    m.appendChild(op);
+  });
+}
+
+window.enviar = async ()=>{
+  let nome=document.getElementById("nome").value;
+  let turno=document.getElementById("turno").value;
+  let maquina=document.getElementById("maquina").value;
+  let q=Number(document.getElementById("q").value);
+
+  if(!q) return alert("Digite quantidade");
+
+  await addDoc(collection(db,"producao"),{
+    nome,turno,maquina,quantidade:q,
+    data:new Date().toISOString().split("T")[0]
+  });
+};
+
+// tempo real
+onSnapshot(collection(db,"producao"), snap=>{
+  dados=[];
+  snap.forEach(doc=>dados.push(doc.data()));
+  atualizar();
+});
+
+function atualizar(){
+  ranking();
+  grafico();
+}
+
+function ranking(){
+  let r={};
+  dados.forEach(d=>{
+    if(!r[d.nome]) r[d.nome]=0;
+    r[d.nome]+=d.quantidade;
+  });
+
+  let div=document.getElementById("ranking");
+  div.innerHTML="";
+
+  Object.entries(r).sort((a,b)=>b[1]-a[1])
+  .forEach(([n,t],i)=>{
+    div.innerHTML+=`<div class="rank-item">${i+1}º ${n}<span>${t}</span></div>`;
+  });
+}
+
+let ctx=document.getElementById("chart");
+let chart=new Chart(ctx,{type:"line",data:{labels:[],datasets:[]}});
+
+function grafico(){
+  let dias=[...new Set(dados.map(d=>d.data))].sort();
+  let total={}, soma=0, linha=[];
+
+  dias.forEach(d=>total[d]=0);
+  dados.forEach(d=>total[d]+=d.quantidade);
+
+  dias.forEach(d=>{
+    soma+=total[d];
+    linha.push(soma);
+  });
+
+  chart.data.labels=dias;
+  chart.data.datasets=[{label:"Total",data:linha}];
+  chart.update();
+}
+
+carregar();
+
+</script>
+
+</body>
+</html>
