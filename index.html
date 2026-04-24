@@ -10,13 +10,28 @@
 <style>
 body { margin:0; font-family:Arial; background:#08172c; color:white; }
 nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
-button { border:none; padding:8px; border-radius:6px; }
+button { border:none; padding:8px; border-radius:6px; cursor:pointer; }
 .section { display:none; padding:15px; }
 .active { display:block; }
 .card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
 input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radius:6px; }
-.rank-item { background:#163c66; padding:10px; margin:5px 0; border-radius:10px; display:flex; justify-content:space-between; }
-.inativo { opacity:0.4; text-decoration:line-through; }
+
+.rank-item {
+  background:#163c66;
+  padding:10px;
+  margin:5px 0;
+  border-radius:10px;
+  display:flex;
+  justify-content:space-between;
+}
+
+.log-item {
+  background:#0f2a4d;
+  padding:10px;
+  margin:5px 0;
+  border-radius:10px;
+}
+
 </style>
 </head>
 <body>
@@ -27,12 +42,15 @@ input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radiu
   <button onclick="trocar('grafico')">📊</button>
 </nav>
 
+<!-- RANKING -->
 <div id="home" class="section active">
-  <h2>Ranking</h2>
+  <h2>Ranking por Máquina</h2>
   <div id="ranking"></div>
 </div>
 
+<!-- ADM -->
 <div id="adm" class="section">
+
   <div class="card">
     <h3>Produção</h3>
 
@@ -52,15 +70,13 @@ input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radiu
   </div>
 
   <div class="card">
-    <h3>Auxiliares</h3>
-
-    <input id="novoNome" placeholder="Novo auxiliar">
-    <button onclick="addAux()">Adicionar</button>
-
-    <ul id="listaAux"></ul>
+    <h3>Registros</h3>
+    <div id="logs"></div>
   </div>
+
 </div>
 
+<!-- GRÁFICO -->
 <div id="grafico" class="section">
   <canvas id="chart"></canvas>
 </div>
@@ -74,27 +90,24 @@ import {
   addDoc,
   onSnapshot,
   doc,
-  updateDoc
+  updateDoc,
+  deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔥 CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyD-GnRzf_Km4WMnWkVEnlZCj-nASq7IzOI",
   authDomain: "topforro-4815f.firebaseapp.com",
   projectId: "topforro-4815f",
-  storageBucket: "topforro-4815f.firebasestorage.app",
-  messagingSenderId: "987788433002",
-  appId: "1:987788433002:web:80841db4497cdc58a09c13"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let dados = [];
-let auxiliares = [];
+let auxiliares = ["Carlos","João","Maria"];
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
-// 🔥 FUNÇÕES GLOBAIS
+// 🔥 FUNÇÕES
 window.trocar = function(t){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.getElementById(t).classList.add("active");
@@ -105,24 +118,28 @@ window.abrirADM = function(){
   if(s==="2026deltapaython") window.trocar("adm");
 }
 
-window.addAux = async function(){
-  let nome = document.getElementById("novoNome").value.trim();
-  if(!nome) return;
-
-  await addDoc(collection(db,"auxiliares"),{
-    nome,
-    ativo:true
+// carregar selects
+function carregar(){
+  let n=document.getElementById("nome");
+  n.innerHTML="";
+  auxiliares.forEach(a=>{
+    let op=document.createElement("option");
+    op.value=a;
+    op.textContent=a;
+    n.appendChild(op);
   });
 
-  document.getElementById("novoNome").value="";
-}
-
-window.toggle = async function(id, status){
-  await updateDoc(doc(db,"auxiliares",id),{
-    ativo:!status
+  let m=document.getElementById("maquina");
+  m.innerHTML="";
+  maquinas.forEach(a=>{
+    let op=document.createElement("option");
+    op.value=a;
+    op.textContent=a;
+    m.appendChild(op);
   });
 }
 
+// salvar produção
 window.enviar = async function(){
   let nome=document.getElementById("nome").value;
   let turno=document.getElementById("turno").value;
@@ -135,91 +152,101 @@ window.enviar = async function(){
     nome,turno,maquina,quantidade:q,
     data:new Date().toISOString().split("T")[0]
   });
+
+  document.getElementById("q").value="";
 }
 
-// 🔄 REALTIME
-onSnapshot(collection(db,"auxiliares"), snap=>{
-  auxiliares=[];
-  snap.forEach(doc=>{
-    auxiliares.push({id:doc.id,...doc.data()});
-  });
-  atualizarAux();
-});
-
+// 🔥 REALTIME
 onSnapshot(collection(db,"producao"), snap=>{
   dados=[];
-  snap.forEach(doc=>dados.push(doc.data()));
+  snap.forEach(doc=>{
+    dados.push({id:doc.id,...doc.data()});
+  });
   atualizar();
 });
 
-// atualizar auxiliares
-function atualizarAux(){
-  let select = document.getElementById("nome");
-  select.innerHTML="";
+// 🔥 RANKING POR MÁQUINA
+function ranking(){
 
-  let ul = document.getElementById("listaAux");
-  ul.innerHTML="";
+  let maquinasRank = {};
 
-  auxiliares.forEach(a=>{
+  dados.forEach(d=>{
+    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina] = {};
 
-    if(a.ativo){
-      let op=document.createElement("option");
-      op.value=a.nome;
-      op.textContent=a.nome;
-      select.appendChild(op);
-    }
+    if(!maquinasRank[d.maquina][d.nome])
+      maquinasRank[d.maquina][d.nome] = 0;
 
-    let li=document.createElement("li");
-    li.className = a.ativo ? "" : "inativo";
-
-    li.innerHTML = `
-      ${a.nome} (${a.ativo?"ativo":"demitido"})
-      <button onclick="toggle('${a.id}',${a.ativo})">
-        ${a.ativo?"Demitir":"Reativar"}
-      </button>
-    `;
-
-    ul.appendChild(li);
+    maquinasRank[d.maquina][d.nome] += d.quantidade;
   });
 
-  let maq=document.getElementById("maquina");
-  maq.innerHTML="";
-  maquinas.forEach(m=>{
-    let op=document.createElement("option");
-    op.value=m;
-    op.textContent=m;
-    maq.appendChild(op);
+  let div = document.getElementById("ranking");
+  div.innerHTML = "";
+
+  Object.entries(maquinasRank).forEach(([maquina, pessoas])=>{
+
+    div.innerHTML += `<h3>🏭 ${maquina}</h3>`;
+
+    let lista = Object.entries(pessoas).sort((a,b)=>b[1]-a[1]);
+
+    lista.forEach(([nome,total],i)=>{
+      div.innerHTML += `
+        <div class="rank-item">
+          ${i+1}º ${nome}
+          <span>${total}</span>
+        </div>`;
+    });
+
   });
+
 }
 
-// ranking
-function ranking(){
-  let r={};
-  dados.forEach(d=>{
-    if(!r[d.nome]) r[d.nome]=0;
-    r[d.nome]+=d.quantidade;
-  });
+// 🔥 LOG + EDITAR + EXCLUIR
+function logs(){
 
-  let div=document.getElementById("ranking");
+  let div=document.getElementById("logs");
   div.innerHTML="";
 
-  Object.entries(r).sort((a,b)=>b[1]-a[1])
-  .forEach(([n,t],i)=>{
-    div.innerHTML+=`
-      <div class="rank-item">
-        ${i+1}º ${n}
-        <span>${t}</span>
-      </div>`;
+  dados.slice().reverse().forEach(d=>{
+
+    div.innerHTML += `
+      <div class="log-item">
+        ${d.nome} - ${d.maquina} - ${d.quantidade}
+
+        <button onclick="editar('${d.id}')">✏️</button>
+        <button onclick="remover('${d.id}')">🗑️</button>
+      </div>
+    `;
   });
+
 }
 
-// gráfico
+// editar
+window.editar = async function(id){
+
+  let novaMaquina = prompt("Nova máquina:");
+  if(!novaMaquina) return;
+
+  await updateDoc(doc(db,"producao",id),{
+    maquina:novaMaquina
+  });
+
+}
+
+// excluir
+window.remover = async function(id){
+  if(confirm("Excluir registro?")){
+    await deleteDoc(doc(db,"producao",id));
+  }
+}
+
+// gráfico simples
 let chart = new Chart(document.getElementById("chart"),{
   type:"line",
   data:{labels:[],datasets:[]}
 });
 
 function grafico(){
+
   let dias=[...new Set(dados.map(d=>d.data))].sort();
   let total={}, soma=0, linha=[];
 
@@ -232,19 +259,17 @@ function grafico(){
   });
 
   chart.data.labels=dias;
-  chart.data.datasets=[{
-    label:"Produção Total",
-    data:linha,
-    borderWidth:3
-  }];
-
+  chart.data.datasets=[{label:"Total",data:linha}];
   chart.update();
 }
 
 function atualizar(){
   ranking();
+  logs();
   grafico();
 }
+
+carregar();
 
 </script>
 
