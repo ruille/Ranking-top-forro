@@ -9,45 +9,14 @@
 
 <style>
 body { margin:0; font-family:Arial; background:#08172c; color:white; }
-
-nav {
-  display:flex; justify-content:space-around;
-  background:#0d2a4d; padding:10px;
-}
-
-button { border:none; border-radius:6px; padding:8px; }
-
+nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
+button { border:none; padding:8px; border-radius:6px; }
 .section { display:none; padding:15px; }
 .active { display:block; }
-
-.card {
-  background:#102a4a;
-  padding:15px;
-  margin:10px 0;
-  border-radius:10px;
-}
-
-input,select {
-  width:100%;
-  padding:10px;
-  margin:5px 0;
-  border:none;
-  border-radius:6px;
-}
-
-.rank-item {
-  background:#163c66;
-  padding:10px;
-  margin:5px 0;
-  border-radius:10px;
-  display:flex;
-  justify-content:space-between;
-}
-
-.inativo {
-  opacity:0.4;
-  text-decoration:line-through;
-}
+.card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
+input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radius:6px; }
+.rank-item { background:#163c66; padding:10px; margin:5px 0; border-radius:10px; display:flex; justify-content:space-between; }
+.inativo { opacity:0.4; text-decoration:line-through; }
 </style>
 </head>
 <body>
@@ -58,15 +27,12 @@ input,select {
   <button onclick="trocar('grafico')">📊</button>
 </nav>
 
-<!-- RANKING -->
 <div id="home" class="section active">
   <h2>Ranking</h2>
   <div id="ranking"></div>
 </div>
 
-<!-- ADM -->
 <div id="adm" class="section">
-
   <div class="card">
     <h3>Produção</h3>
 
@@ -93,10 +59,8 @@ input,select {
 
     <ul id="listaAux"></ul>
   </div>
-
 </div>
 
-<!-- GRÁFICO -->
 <div id="grafico" class="section">
   <canvas id="chart"></canvas>
 </div>
@@ -113,7 +77,7 @@ import {
   updateDoc
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-// 🔥 SEU FIREBASE
+// 🔥 CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyD-GnRzf_Km4WMnWkVEnlZCj-nASq7IzOI",
   authDomain: "topforro-4815f.firebaseapp.com",
@@ -126,27 +90,22 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// 📦 dados
 let dados = [];
 let auxiliares = [];
-
-// 🏭 máquinas
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
-// 🔐 ADM
-function abrirADM(){
-  let s = prompt("Senha:");
-  if(s==="2026deltapaython") trocar("adm");
-}
-
-// trocar tela
-function trocar(t){
+// 🔥 FUNÇÕES GLOBAIS
+window.trocar = function(t){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.getElementById(t).classList.add("active");
 }
 
-// 🔥 adicionar auxiliar
-window.addAux = async ()=>{
+window.abrirADM = function(){
+  let s = prompt("Senha:");
+  if(s==="2026deltapaython") window.trocar("adm");
+}
+
+window.addAux = async function(){
   let nome = document.getElementById("novoNome").value.trim();
   if(!nome) return;
 
@@ -156,34 +115,45 @@ window.addAux = async ()=>{
   });
 
   document.getElementById("novoNome").value="";
-};
+}
 
-// 🔥 ativar/desativar
-window.toggle = async (id, status)=>{
+window.toggle = async function(id, status){
   await updateDoc(doc(db,"auxiliares",id),{
     ativo:!status
   });
-};
+}
 
-// 🔄 ouvir auxiliares
+window.enviar = async function(){
+  let nome=document.getElementById("nome").value;
+  let turno=document.getElementById("turno").value;
+  let maquina=document.getElementById("maquina").value;
+  let q=Number(document.getElementById("q").value);
+
+  if(!q) return alert("Digite quantidade");
+
+  await addDoc(collection(db,"producao"),{
+    nome,turno,maquina,quantidade:q,
+    data:new Date().toISOString().split("T")[0]
+  });
+}
+
+// 🔄 REALTIME
 onSnapshot(collection(db,"auxiliares"), snap=>{
   auxiliares=[];
   snap.forEach(doc=>{
     auxiliares.push({id:doc.id,...doc.data()});
   });
-
-  atualizarAuxiliares();
+  atualizarAux();
 });
 
-// 🔄 ouvir produção
 onSnapshot(collection(db,"producao"), snap=>{
   dados=[];
   snap.forEach(doc=>dados.push(doc.data()));
   atualizar();
 });
 
-// carregar selects
-function atualizarAuxiliares(){
+// atualizar auxiliares
+function atualizarAux(){
   let select = document.getElementById("nome");
   select.innerHTML="";
 
@@ -212,7 +182,6 @@ function atualizarAuxiliares(){
     ul.appendChild(li);
   });
 
-  // máquinas
   let maq=document.getElementById("maquina");
   maq.innerHTML="";
   maquinas.forEach(m=>{
@@ -222,21 +191,6 @@ function atualizarAuxiliares(){
     maq.appendChild(op);
   });
 }
-
-// salvar produção
-window.enviar = async ()=>{
-  let nome=document.getElementById("nome").value;
-  let turno=document.getElementById("turno").value;
-  let maquina=document.getElementById("maquina").value;
-  let q=Number(document.getElementById("q").value);
-
-  if(!q) return alert("Digite quantidade");
-
-  await addDoc(collection(db,"producao"),{
-    nome,turno,maquina,quantidade:q,
-    data:new Date().toISOString().split("T")[0]
-  });
-};
 
 // ranking
 function ranking(){
@@ -287,7 +241,6 @@ function grafico(){
   chart.update();
 }
 
-// atualizar
 function atualizar(){
   ranking();
   grafico();
