@@ -10,11 +10,24 @@
 <style>
 body { margin:0; font-family:Arial; background:#08172c; color:white; }
 nav { display:flex; justify-content:space-around; background:#0d2a4d; padding:10px; }
-button { border:none; padding:8px; border-radius:6px; cursor:pointer; }
+button { padding:8px; border:none; border-radius:6px; cursor:pointer; }
 .section { display:none; padding:15px; }
 .active { display:block; }
-.card { background:#102a4a; padding:15px; margin:10px 0; border-radius:10px; }
-input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radius:6px; }
+
+.card {
+  background:#102a4a;
+  padding:15px;
+  margin:10px 0;
+  border-radius:10px;
+}
+
+input,select {
+  width:100%;
+  padding:10px;
+  margin:5px 0;
+  border:none;
+  border-radius:6px;
+}
 
 .rank-item {
   background:#163c66;
@@ -31,20 +44,20 @@ input,select { width:100%; padding:10px; margin:5px 0; border:none; border-radiu
   margin:5px 0;
   border-radius:10px;
 }
-
 </style>
 </head>
 <body>
 
 <nav>
-  <button onclick="trocar('home')">🏆</button>
-  <button onclick="abrirADM()">👑</button>
+  <button onclick="trocar('home')">🏆 Geral</button>
+  <button onclick="relatorioMensal()">📅 Mês</button>
+  <button onclick="abrirADM()">👑 ADM</button>
   <button onclick="trocar('grafico')">📊</button>
 </nav>
 
 <!-- RANKING -->
 <div id="home" class="section active">
-  <h2>Ranking por Máquina</h2>
+  <h2 id="titulo">Ranking por Máquina</h2>
   <div id="ranking"></div>
 </div>
 
@@ -107,12 +120,13 @@ let dados = [];
 let auxiliares = ["Carlos","João","Maria"];
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
-// 🔥 FUNÇÕES
+// 🔁 navegação
 window.trocar = function(t){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.getElementById(t).classList.add("active");
 }
 
+// 🔐 ADM
 window.abrirADM = function(){
   let s = prompt("Senha:");
   if(s==="2026deltapaython") window.trocar("adm");
@@ -156,21 +170,82 @@ window.enviar = async function(){
   document.getElementById("q").value="";
 }
 
-// 🔥 REALTIME
+// 🔄 realtime
 onSnapshot(collection(db,"producao"), snap=>{
   dados=[];
   snap.forEach(doc=>{
     dados.push({id:doc.id,...doc.data()});
   });
-  atualizar();
+  ranking();
+  logs();
+  grafico();
 });
 
-// 🔥 RANKING POR MÁQUINA
+// 📊 ranking por máquina
 function ranking(){
+
+  document.getElementById("titulo").innerText = "Ranking por Máquina";
 
   let maquinasRank = {};
 
   dados.forEach(d=>{
+    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina] = {};
+    if(!maquinasRank[d.maquina][d.nome])
+      maquinasRank[d.maquina][d.nome] = 0;
+
+    maquinasRank[d.maquina][d.nome] += d.quantidade;
+  });
+
+  let div = document.getElementById("ranking");
+  div.innerHTML = "";
+
+  Object.entries(maquinasRank).forEach(([maq, pessoas])=>{
+    div.innerHTML += `<h3>🏭 ${maq}</h3>`;
+
+    Object.entries(pessoas)
+      .sort((a,b)=>b[1]-a[1])
+      .forEach(([nome,total],i)=>{
+        div.innerHTML += `
+          <div class="rank-item">
+            ${i+1}º ${nome}
+            <span>${total}</span>
+          </div>`;
+      });
+  });
+}
+
+// 📅 cálculo mês (20→20)
+function mesAtual(d){
+  let data = new Date(d);
+  let dia = data.getDate();
+  let mes = data.getMonth();
+  let ano = data.getFullYear();
+
+  if(dia < 20){
+    mes--;
+    if(mes < 0){
+      mes = 11;
+      ano--;
+    }
+  }
+
+  return `${mes}-${ano}`;
+}
+
+// 📅 relatório mensal
+window.relatorioMensal = function(){
+
+  window.trocar("home");
+
+  document.getElementById("titulo").innerText = "📅 Relatório Mensal";
+
+  let atual = mesAtual(new Date());
+  let maquinasRank = {};
+
+  dados.forEach(d=>{
+
+    if(mesAtual(d.data) !== atual) return;
+
     if(!maquinasRank[d.maquina]) maquinasRank[d.maquina] = {};
 
     if(!maquinasRank[d.maquina][d.nome])
@@ -182,64 +257,55 @@ function ranking(){
   let div = document.getElementById("ranking");
   div.innerHTML = "";
 
-  Object.entries(maquinasRank).forEach(([maquina, pessoas])=>{
+  Object.entries(maquinasRank).forEach(([maq, pessoas])=>{
+    div.innerHTML += `<h3>🏭 ${maq}</h3>`;
 
-    div.innerHTML += `<h3>🏭 ${maquina}</h3>`;
-
-    let lista = Object.entries(pessoas).sort((a,b)=>b[1]-a[1]);
-
-    lista.forEach(([nome,total],i)=>{
-      div.innerHTML += `
-        <div class="rank-item">
-          ${i+1}º ${nome}
-          <span>${total}</span>
-        </div>`;
-    });
-
+    Object.entries(pessoas)
+      .sort((a,b)=>b[1]-a[1])
+      .forEach(([nome,total],i)=>{
+        div.innerHTML += `
+          <div class="rank-item">
+            ${i+1}º ${nome}
+            <span>${total}</span>
+          </div>`;
+      });
   });
 
 }
 
-// 🔥 LOG + EDITAR + EXCLUIR
+// 📝 logs
 function logs(){
-
   let div=document.getElementById("logs");
   div.innerHTML="";
 
   dados.slice().reverse().forEach(d=>{
-
     div.innerHTML += `
       <div class="log-item">
         ${d.nome} - ${d.maquina} - ${d.quantidade}
-
         <button onclick="editar('${d.id}')">✏️</button>
         <button onclick="remover('${d.id}')">🗑️</button>
-      </div>
-    `;
+      </div>`;
   });
-
 }
 
 // editar
 window.editar = async function(id){
-
-  let novaMaquina = prompt("Nova máquina:");
-  if(!novaMaquina) return;
+  let nova = prompt("Nova máquina:");
+  if(!nova) return;
 
   await updateDoc(doc(db,"producao",id),{
-    maquina:novaMaquina
+    maquina:nova
   });
-
 }
 
 // excluir
 window.remover = async function(id){
-  if(confirm("Excluir registro?")){
+  if(confirm("Excluir?")){
     await deleteDoc(doc(db,"producao",id));
   }
 }
 
-// gráfico simples
+// gráfico
 let chart = new Chart(document.getElementById("chart"),{
   type:"line",
   data:{labels:[],datasets:[]}
@@ -263,12 +329,7 @@ function grafico(){
   chart.update();
 }
 
-function atualizar(){
-  ranking();
-  logs();
-  grafico();
-}
-
+// iniciar
 carregar();
 
 </script>
