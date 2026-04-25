@@ -38,11 +38,9 @@ input,select {
   justify-content:space-between;
 }
 
-.log-item {
-  background:#0f2a4d;
-  padding:10px;
-  margin:5px 0;
-  border-radius:10px;
+.inativo {
+  opacity:0.4;
+  text-decoration:line-through;
 }
 </style>
 </head>
@@ -55,13 +53,11 @@ input,select {
   <button onclick="trocar('grafico')">📊</button>
 </nav>
 
-<!-- RANKING -->
 <div id="home" class="section active">
-  <h2 id="titulo">Ranking por Máquina</h2>
+  <h2 id="titulo">Ranking</h2>
   <div id="ranking"></div>
 </div>
 
-<!-- ADM -->
 <div id="adm" class="section">
 
   <div class="card">
@@ -83,13 +79,21 @@ input,select {
   </div>
 
   <div class="card">
+    <h3>Auxiliares</h3>
+
+    <input id="novoNome" placeholder="Novo auxiliar">
+    <button onclick="addAux()">Adicionar</button>
+
+    <ul id="listaAux"></ul>
+  </div>
+
+  <div class="card">
     <h3>Registros</h3>
     <div id="logs"></div>
   </div>
 
 </div>
 
-<!-- GRÁFICO -->
 <div id="grafico" class="section">
   <canvas id="chart"></canvas>
 </div>
@@ -110,50 +114,96 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyD-GnRzf_Km4WMnWkVEnlZCj-nASq7IzOI",
   authDomain: "topforro-4815f.firebaseapp.com",
-  projectId: "topforro-4815f",
+  projectId: "topforro-4815f"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let dados = [];
-let auxiliares = ["Carlos","João","Maria"];
+let auxiliares = [];
 let maquinas = ["Extrusora 01","Extrusora 02","Extrusora 03","Extrusora 04","Extrusora 05"];
 
-// 🔁 navegação
 window.trocar = function(t){
   document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
   document.getElementById(t).classList.add("active");
 }
 
-// 🔐 ADM
 window.abrirADM = function(){
   let s = prompt("Senha:");
-  if(s==="2026deltapaython") window.trocar("adm");
+  if(s==="2026deltapaython") trocar("adm");
 }
 
-// carregar selects
-function carregar(){
-  let n=document.getElementById("nome");
-  n.innerHTML="";
+// 🔥 AUXILIARES
+window.addAux = async function(){
+  let nome = document.getElementById("novoNome").value.trim();
+  if(!nome) return;
+
+  await addDoc(collection(db,"auxiliares"),{
+    nome,
+    ativo:true
+  });
+
+  document.getElementById("novoNome").value="";
+}
+
+window.toggle = async function(id,status){
+  await updateDoc(doc(db,"auxiliares",id),{
+    ativo:!status
+  });
+}
+
+// 🔄 realtime auxiliares
+onSnapshot(collection(db,"auxiliares"), snap=>{
+  auxiliares=[];
+  snap.forEach(doc=>{
+    auxiliares.push({id:doc.id,...doc.data()});
+  });
+  atualizarAux();
+});
+
+// atualizar lista
+function atualizarAux(){
+
+  let select = document.getElementById("nome");
+  select.innerHTML="";
+
+  let ul = document.getElementById("listaAux");
+  ul.innerHTML="";
+
   auxiliares.forEach(a=>{
-    let op=document.createElement("option");
-    op.value=a;
-    op.textContent=a;
-    n.appendChild(op);
+
+    if(a.ativo){
+      let op=document.createElement("option");
+      op.value=a.nome;
+      op.textContent=a.nome;
+      select.appendChild(op);
+    }
+
+    let li=document.createElement("li");
+    li.className = a.ativo ? "" : "inativo";
+
+    li.innerHTML = `
+      ${a.nome} (${a.ativo?"ativo":"demitido"})
+      <button onclick="toggle('${a.id}',${a.ativo})">
+        ${a.ativo?"Demitir":"Reativar"}
+      </button>
+    `;
+
+    ul.appendChild(li);
   });
 
-  let m=document.getElementById("maquina");
-  m.innerHTML="";
-  maquinas.forEach(a=>{
+  let maq=document.getElementById("maquina");
+  maq.innerHTML="";
+  maquinas.forEach(m=>{
     let op=document.createElement("option");
-    op.value=a;
-    op.textContent=a;
-    m.appendChild(op);
+    op.value=m;
+    op.textContent=m;
+    maq.appendChild(op);
   });
 }
 
-// salvar produção
+// 🔥 PRODUÇÃO
 window.enviar = async function(){
   let nome=document.getElementById("nome").value;
   let turno=document.getElementById("turno").value;
@@ -166,46 +216,43 @@ window.enviar = async function(){
     nome,turno,maquina,quantidade:q,
     data:new Date().toISOString().split("T")[0]
   });
-
-  document.getElementById("q").value="";
 }
 
-// 🔄 realtime
+// realtime produção
 onSnapshot(collection(db,"producao"), snap=>{
   dados=[];
   snap.forEach(doc=>{
     dados.push({id:doc.id,...doc.data()});
   });
-  ranking();
-  logs();
-  grafico();
+  atualizar();
 });
 
-// 📊 ranking por máquina
+// 🔥 RANKING POR MÁQUINA
 function ranking(){
 
-  document.getElementById("titulo").innerText = "Ranking por Máquina";
+  document.getElementById("titulo").innerText="Ranking por Máquina";
 
   let maquinasRank = {};
 
   dados.forEach(d=>{
-    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina] = {};
-    if(!maquinasRank[d.maquina][d.nome])
-      maquinasRank[d.maquina][d.nome] = 0;
+    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina]={};
 
-    maquinasRank[d.maquina][d.nome] += d.quantidade;
+    if(!maquinasRank[d.maquina][d.nome])
+      maquinasRank[d.maquina][d.nome]=0;
+
+    maquinasRank[d.maquina][d.nome]+=d.quantidade;
   });
 
-  let div = document.getElementById("ranking");
-  div.innerHTML = "";
+  let div=document.getElementById("ranking");
+  div.innerHTML="";
 
-  Object.entries(maquinasRank).forEach(([maq, pessoas])=>{
-    div.innerHTML += `<h3>🏭 ${maq}</h3>`;
+  Object.entries(maquinasRank).forEach(([maq,pessoas])=>{
+    div.innerHTML+=`<h3>🏭 ${maq}</h3>`;
 
     Object.entries(pessoas)
       .sort((a,b)=>b[1]-a[1])
       .forEach(([nome,total],i)=>{
-        div.innerHTML += `
+        div.innerHTML+=`
           <div class="rank-item">
             ${i+1}º ${nome}
             <span>${total}</span>
@@ -214,73 +261,67 @@ function ranking(){
   });
 }
 
-// 📅 cálculo mês (20→20)
+// 📅 MÊS 20→20
 function mesAtual(d){
-  let data = new Date(d);
-  let dia = data.getDate();
-  let mes = data.getMonth();
-  let ano = data.getFullYear();
+  let data=new Date(d);
+  let dia=data.getDate();
+  let mes=data.getMonth();
+  let ano=data.getFullYear();
 
-  if(dia < 20){
+  if(dia<20){
     mes--;
-    if(mes < 0){
-      mes = 11;
-      ano--;
-    }
+    if(mes<0){mes=11;ano--;}
   }
 
   return `${mes}-${ano}`;
 }
 
-// 📅 relatório mensal
+// 📅 RELATÓRIO
 window.relatorioMensal = function(){
 
-  window.trocar("home");
+  trocar("home");
+  document.getElementById("titulo").innerText="Relatório Mensal";
 
-  document.getElementById("titulo").innerText = "📅 Relatório Mensal";
-
-  let atual = mesAtual(new Date());
-  let maquinasRank = {};
+  let atual=mesAtual(new Date());
+  let maquinasRank={};
 
   dados.forEach(d=>{
+    if(mesAtual(d.data)!==atual) return;
 
-    if(mesAtual(d.data) !== atual) return;
-
-    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina] = {};
+    if(!maquinasRank[d.maquina]) maquinasRank[d.maquina]={};
 
     if(!maquinasRank[d.maquina][d.nome])
-      maquinasRank[d.maquina][d.nome] = 0;
+      maquinasRank[d.maquina][d.nome]=0;
 
-    maquinasRank[d.maquina][d.nome] += d.quantidade;
+    maquinasRank[d.maquina][d.nome]+=d.quantidade;
   });
 
-  let div = document.getElementById("ranking");
-  div.innerHTML = "";
+  let div=document.getElementById("ranking");
+  div.innerHTML="";
 
-  Object.entries(maquinasRank).forEach(([maq, pessoas])=>{
-    div.innerHTML += `<h3>🏭 ${maq}</h3>`;
+  Object.entries(maquinasRank).forEach(([maq,pessoas])=>{
+    div.innerHTML+=`<h3>🏭 ${maq}</h3>`;
 
     Object.entries(pessoas)
       .sort((a,b)=>b[1]-a[1])
       .forEach(([nome,total],i)=>{
-        div.innerHTML += `
+        div.innerHTML+=`
           <div class="rank-item">
             ${i+1}º ${nome}
             <span>${total}</span>
           </div>`;
       });
   });
-
 }
 
-// 📝 logs
+// 📝 LOGS
 function logs(){
   let div=document.getElementById("logs");
   div.innerHTML="";
 
   dados.slice().reverse().forEach(d=>{
-    div.innerHTML += `
-      <div class="log-item">
+    div.innerHTML+=`
+      <div>
         ${d.nome} - ${d.maquina} - ${d.quantidade}
         <button onclick="editar('${d.id}')">✏️</button>
         <button onclick="remover('${d.id}')">🗑️</button>
@@ -290,7 +331,7 @@ function logs(){
 
 // editar
 window.editar = async function(id){
-  let nova = prompt("Nova máquina:");
+  let nova=prompt("Nova máquina:");
   if(!nova) return;
 
   await updateDoc(doc(db,"producao",id),{
@@ -306,15 +347,14 @@ window.remover = async function(id){
 }
 
 // gráfico
-let chart = new Chart(document.getElementById("chart"),{
+let chart=new Chart(document.getElementById("chart"),{
   type:"line",
   data:{labels:[],datasets:[]}
 });
 
 function grafico(){
-
   let dias=[...new Set(dados.map(d=>d.data))].sort();
-  let total={}, soma=0, linha=[];
+  let total={},soma=0,linha=[];
 
   dias.forEach(d=>total[d]=0);
   dados.forEach(d=>total[d]+=d.quantidade);
@@ -329,8 +369,11 @@ function grafico(){
   chart.update();
 }
 
-// iniciar
-carregar();
+function atualizar(){
+  ranking();
+  logs();
+  grafico();
+}
 
 </script>
 
